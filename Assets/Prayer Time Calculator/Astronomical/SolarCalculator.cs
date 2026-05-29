@@ -141,7 +141,7 @@ namespace GamePause.PrayerTimeCalculator.Astronomical
             double decRad = AngleUtilities.DegreesToRadians(declination);
             double angleRad = AngleUtilities.DegreesToRadians(angle);
 
-            double cosHourAngle = (Math.Sin(angleRad) - Math.Sin(latRad) * Math.Sin(decRad)) /
+            double cosHourAngle = (-Math.Sin(angleRad) - Math.Sin(latRad) * Math.Sin(decRad)) /
                                   (Math.Cos(latRad) * Math.Cos(decRad));
 
             // Check if sun never reaches this angle
