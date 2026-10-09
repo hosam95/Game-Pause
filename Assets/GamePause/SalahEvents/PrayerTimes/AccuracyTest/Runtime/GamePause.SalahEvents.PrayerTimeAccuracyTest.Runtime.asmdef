@@ -1,0 +1,16 @@
+{
+    "name": "GamePause.SalahEvents.PrayerTimeAccuracyTest.Runtime",
+    "rootNamespace": "GamePause.SalahEvents.PrayerTimeAccuracy",
+    "references": [
+        "GamePause.SalahEvents.PrayerTimes"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

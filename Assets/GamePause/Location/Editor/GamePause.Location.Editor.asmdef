@@ -1,0 +1,14 @@
+{
+    "name": "GamePause.Location.Editor",
+    "rootNamespace": "GamePause.Location.Editor",
+    "references": ["GamePause.Location"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
