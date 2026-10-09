@@ -1,0 +1,14 @@
+{
+    "name": "GamePause.Location",
+    "rootNamespace": "GamePause.Location",
+    "references": ["GamePause.Debugging"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

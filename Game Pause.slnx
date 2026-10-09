@@ -1,6 +1,0 @@
-﻿<Solution>
-  <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="GamePause.PrayerTimeCalculator.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
-  <Project Path="GamePause.PrayerTimeCalculator.EditorTests.csproj" />
-</Solution>
