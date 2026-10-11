@@ -30,6 +30,8 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
         public string maghrib;
         public string isha;
         public bool ramadan;         // true when reference uses Isha = Maghrib + 120 min (UmmAlQura, Ramaḍān)
+        public string high_lat_rule; // HighLatitudeRule enum name the reference used; empty = AngleBased (baseline dataset)
+        public string source;        // reference source, URL and retrieval date; empty = the dataset's own source
     }
 
     /// <summary>Root object of the accuracy dataset JSON.</summary>
