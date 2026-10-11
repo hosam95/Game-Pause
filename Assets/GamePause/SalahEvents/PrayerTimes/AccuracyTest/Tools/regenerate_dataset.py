@@ -95,9 +95,21 @@ PRAYERS = [("Fajr", "fajr"), ("Sunrise", "sunrise"), ("Dhuhr", "dhuhr"),
            ("Asr", "asr"), ("Maghrib", "maghrib"), ("Isha", "isha")]
 
 
-def raw_path(raw_dir, method, asr_name, city, datestr, tz):
+def raw_path(raw_dir, method, asr_name, city, datestr, tz, hl=""):
     key = f"{method}_{asr_name}_{city}_{datestr}_{tz.replace('/', '_')}".replace(" ", "s")
+    if hl:
+        key += f"_hl{hl}"   # non-default latitudeAdjustmentMethod (1 middle of night, 2 one-seventh)
     return os.path.join(raw_dir, key + ".json")
+
+
+def task_raw_path(raw_dir, t):
+    return raw_path(raw_dir, t["method"], t["asr"], t["city"], t["date"], t["tz"], t.get("hl", ""))
+
+
+def aladhan_date(iso):
+    """The /timings/{date} endpoint needs DD-MM-YYYY; an ISO date is silently read as year 2011."""
+    y, m, d = iso.split("-")
+    return f"{d}-{m}-{y}"
 
 
 def make_tasks():
@@ -118,7 +130,7 @@ def download_all(tasks, raw_dir, workers=4):
     if requests is None:
         sys.exit("requests is required for download mode: pip install requests")
     os.makedirs(raw_dir, exist_ok=True)
-    todo = [t for t in tasks if not os.path.exists(raw_path(raw_dir, t["method"], t["asr"], t["city"], t["date"], t["tz"]))]
+    todo = [t for t in tasks if not os.path.exists(task_raw_path(raw_dir, t))]
     print(f"total={len(tasks)}  cached={len(tasks)-len(todo)}  to_download={len(todo)}", flush=True)
     if not todo:
         return
@@ -129,9 +141,11 @@ def download_all(tasks, raw_dir, workers=4):
     state = {"done": 0, "fail": 0}
 
     def fetch(t, attempt=0):
-        url = f"https://api.aladhan.com/v1/timings/{t['date']}"
+        url = f"https://api.aladhan.com/v1/timings/{aladhan_date(t['date'])}"
         params = {"latitude": t["lat"], "longitude": t["lon"], "method": t["method_id"],
                   "school": t["school"], "timezonestring": t["tz"]}
+        if t.get("hl"):
+            params["latitudeAdjustmentMethod"] = t["hl"]
         expected = "HANAFI" if t["asr"] == "Hanafi" else "STANDARD"
         try:
             r = sess.get(url, params=params, timeout=25)
@@ -141,7 +155,9 @@ def download_all(tasks, raw_dir, workers=4):
                     meta = j["data"].get("meta", {})
                     if str(meta.get("school", "")).upper() != expected:
                         raise RuntimeError(f"school mismatch: requested {expected}, got {meta.get('school')}")
-                    p = raw_path(raw_dir, t["method"], t["asr"], t["city"], t["date"], t["tz"])
+                    if j["data"]["date"]["gregorian"]["date"] != aladhan_date(t["date"]):
+                        raise RuntimeError(f"date mismatch: requested {t['date']}, got {j['data']['date']['gregorian']['date']}")
+                    p = task_raw_path(raw_dir, t)
                     tmp = p + ".tmp"
                     with open(tmp, "w") as f:
                         json.dump(j, f)
@@ -183,7 +199,7 @@ def build(tasks, raw_dir, out_path):
     records = []
     missing = 0
     for t in sorted(tasks, key=lambda x: (x["method"], x["asr"], x["city"], x["date"])):
-        p = raw_path(raw_dir, t["method"], t["asr"], t["city"], t["date"], t["tz"])
+        p = task_raw_path(raw_dir, t)
         if not os.path.exists(p):
             missing += 1
             continue

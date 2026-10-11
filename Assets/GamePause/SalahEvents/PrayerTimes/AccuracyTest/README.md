@@ -27,7 +27,9 @@ every deviation of ≥2 minutes to `Temp/prayer_accuracy_outliers.csv`.
 
 ### 3. PlayMode tests (CI / headless)
 Seven NUnit PlayMode tests in `Tests/PrayerTimeAccuracyPlayModeTests.cs` assert the
-accuracy thresholds (they fail the build if accuracy regresses):
+baseline accuracy thresholds, and eight in `Tests/PrayerTimeExtendedAccuracyPlayModeTests.cs`
+assert the extended and JPL datasets (see "Extended dataset" below). They fail the build if
+accuracy regresses:
 
 ```
 "…/Unity.exe" -batchmode -quit -nographics -projectPath "F:/Unity Projects/Game Pause" \
@@ -147,8 +149,9 @@ equally stress-tested.
 
 ### Regenerating / extending the dataset
 
-`Tools/regenerate_dataset.py` is self-contained and reproduces the bundled dataset
-byte-for-byte (validated). It downloads fresh data from the AlAdhan API and rebuilds
+`Tools/regenerate_dataset.py` rebuilds the baseline dataset (the API date is sent as
+`DD-MM-YYYY`: AlAdhan silently reads an ISO date as year 2011, so the script now also checks
+the Gregorian date the API returns). It downloads fresh data from the AlAdhan API and rebuilds
 the JSON with the exact schema above.
 
 ```
@@ -216,14 +219,97 @@ under MuslimWorldLeague, on dates Jan–Feb and Nov–Dec. The maximum is +11 mi
 (Reykjavik Asr, early January).
 
 **Why:** the reference (PrayTimes family) evaluates the sun position with the
-USNO *approximation* (a truncated series) while the module under test uses the full
-NOAA formula, and the reference samples the sun at the *previous* iteration's time.
-At 64°N in winter the Asr shadow angle is very shallow, so those two algorithmic
-differences amplify into multi-minute deltas. This is a genuine, expected algorithmic
-delta — **not** a bug in the module. Every other city, method, and date combination
+USNO *approximation* (a truncated series) and samples the sun at the *previous* iteration's time.
+At 64°N in winter the Asr shadow angle is very shallow, so the reference's own error is
+amplified into multi-minute deltas. The independent JPL dataset (below) confirms that, for Asr,
+the reference is the less accurate side. Every other city, method, and date combination
 is within ±3 minutes. Eight of the ten methods are 100% within ±2 minutes; the two
 exceptions are MuslimWorldLeague (97.3%) and Russia (98.4%), both driven by the
 winter high-latitude cases above.
+
+---
+
+## Extended dataset (latitude ladder, other high-latitude rules, independent source)
+
+The baseline above is unchanged. Two further datasets sit beside it in `Resources/`; every
+record carries `source` (name, URL or library, retrieval date) and `high_lat_rule` (empty =
+AngleBased, as in the baseline). The same engine evaluates them, and
+`Tests/PrayerTimeExtendedAccuracyPlayModeTests.cs` asserts them.
+
+### `prayer_times_dataset_extended.json` (3,492 AlAdhan records, retrieved 2026-10-11)
+
+Source: AlAdhan API v1 (`https://api.aladhan.com/v1/timings`), as for the baseline, all
+MuslimWorldLeague. Built by `Tools/regenerate_extended_dataset.py`.
+
+| Part | Records | What |
+|---|---:|---|
+| Latitude ladder | 1,104 | Madrid 40.4°N, Milan 45.5°N, Frankfurt 50.1°N, Copenhagen 55.7°N, Bergen 60.4°N, Trondheim 63.4°N; Standard + Hanafi, every 4 days |
+| Other high-latitude rules | 736 | `latitudeAdjustmentMethod` 1 (MiddleOfNight) and 2 (SeventhOfNight): Frankfurt, Oslo, Bergen, Reykjavik; Standard Asr |
+| Solstice / clamp windows | 1,652 | daily 1 May–15 Aug and 1 Dec–10 Jan for the cities above 50°N (AngleBased, plus the two rules for the four rule cities) |
+
+Results, module vs AlAdhan:
+
+| City (rule) | Lat | n | ±1 min | ±2 min | max |
+|---|---:|---:|---:|---:|---:|
+| Madrid | 40.4 | 184 | 97.6% | 100% | 2 |
+| Milan | 45.5 | 184 | 95.7% | 100% | 2 |
+| Frankfurt | 50.1 | 297 | 92.8% | 99.9% | 3 |
+| Copenhagen | 55.7 | 297 | 90.5% | 98.8% | 3 |
+| Oslo | 59.9 | 148 | 91.3% | 97.9% | 4 |
+| Bergen | 60.4 | 297 | 82.3% | 95.7% | 5 |
+| Trondheim | 63.4 | 297 | 76.8% | 91.5% | 10 |
+| Reykjavik | 64.1 | 148 | 79.4% | 92.0% | 12 |
+| Frankfurt (SeventhOfNight) | 50.1 | 205 | 96.7% | 100% | 2 |
+| Frankfurt (MiddleOfNight) | 50.1 | 205 | 88.6% | 97.3% | 14 |
+| Oslo, Bergen, Reykjavik (MiddleOfNight) | 60–64 | 615 | 81.5% | 92.1% | 23 |
+| Oslo, Bergen, Reykjavik (SeventhOfNight) | 60–64 | 615 | 78.2% | 93.4% | 12 |
+
+Whole set (20,952 comparisons): ±1 85.6%, ±2 95.7%, ±5 99.2%, mean absolute error 0.72 min, max 23 min.
+
+With the method held fixed (MWL), accuracy falls steadily with latitude, so the lower baseline scores of
+ISNA / Russia / MuslimsOfFrance are mostly a latitude effect rather than a method effect.
+Not covered: `NightFractionAt45` and `None` (AlAdhan offers neither) and polar locations (see below).
+
+### `prayer_times_dataset_jpl.json` (1,272 independent records, retrieved 2026-10-11)
+
+Source: NASA/JPL DE421 ephemeris (`https://ssd.jpl.nasa.gov/ftp/eph/planets/bsp/de421.bsp`) read
+with the Skyfield library. Dhuhr is the solar transit, Sunrise/Maghrib the sun centre at −0.833°,
+Fajr/Isha at −18°/−17°, and Asr comes from the declination at transit (MuslimWorldLeague, Standard +
+Hanafi). It shares no code with PrayTimes or with the module. Days on which the Fajr or Isha angle is
+never reached have no astronomical value and are omitted (200 city/Asr/date combinations), so the set
+measures astronomy only, not any high-latitude ruling. Cities: the six ladder cities plus Cairo and
+Sydney. Built by `Tools/regenerate_jpl_dataset.py` (`pip install skyfield tzdata`).
+
+Which side is closer to the truth (same city, Asr school and date; diff = candidate − JPL, minutes):
+
+| Prayer | AlAdhan ±1 | AlAdhan range | Module ±1 | Module range |
+|---|---:|---:|---:|---:|
+| Fajr | 92.5%* | −1…80* | 100% | −1…1 |
+| Sunrise | 100% | −1…1 | 99.8% | −2…1 |
+| Dhuhr | 100% | −1…1 | 100% | −1…1 |
+| Asr | **57.1%** | −11…9 | **91.6%** | −2…3 |
+| Maghrib | 100% | −1…1 | **77.5%** | −2…3 |
+| Isha | 94.2%* | −58…1* | **69.5%** | −9…8 |
+
+\* Almost every AlAdhan miss for Fajr and Isha is larger than 2 minutes (±2 min: 92.7% and 94.7%): they are days where its night-fraction
+clamp replaces a reachable angle (a ruling, not astronomy).
+Overall, module vs JPL: ±1 89.7%, ±2 97.8%, ±5 99.7%, mean absolute error 0.61 min, max 9 min.
+
+Conclusions:
+- **Asr:** the module is closer to the astronomical truth than AlAdhan. The baseline's Asr outliers
+  (up to +11 min at Reykjavik) are the reference's error.
+- **Maghrib and Isha:** AlAdhan matches JPL and the module does not, with an error that grows with latitude
+  (Maghrib ±1 min: 100% at Cairo and Sydney, 96% at Madrid, 25% at Trondheim); Sunrise shows no such trend.
+  The baseline's explanation that the evening spread comes from the reference was therefore wrong:
+  it is a module issue, tracked as a separate card.
+
+### Not yet covered (needs a decision)
+
+Polar and near-polar places (Tromsø, Longyearbyen, Murmansk, a southern high latitude) have no
+reference here. AlAdhan returns degenerate times there (Fajr = Sunrise = Maghrib = Isha), so it
+cannot serve as a reference, and choosing which authority's polar ruling is the truth is a fiqh
+decision for the project owner. Astronomical sunrise/sunset on polar days can be added from the JPL
+source once that is decided.
 
 ---
 
@@ -243,12 +329,17 @@ Assets/GamePause/SalahEvents/PrayerTimes/AccuracyTest/
 │   ├── PrayerButtonDrawer.cs            inspector button rendering
 │   └── GamePause.SalahEvents.PrayerTimeAccuracyTest.Editor.asmdef
 ├── Tests/                             asmdef: GamePause.SalahEvents.PrayerTimeAccuracyTests (PlayMode)
-│   ├── PrayerTimeAccuracyPlayModeTests.cs  7 threshold tests
+│   ├── PrayerTimeAccuracyPlayModeTests.cs  7 baseline threshold tests
+│   ├── PrayerTimeExtendedAccuracyPlayModeTests.cs  8 tests: extended + JPL datasets
 │   └── GamePause.SalahEvents.PrayerTimeAccuracyTests.asmdef
 ├── Resources/
-│   └── prayer_times_dataset.json      1.7 MB, 4,048 records (loaded via Resources.Load)
+│   ├── prayer_times_dataset.json      1.7 MB, 4,048 records (loaded via Resources.Load)
+│   ├── prayer_times_dataset_extended.json  3,492 AlAdhan records: ladder, rules, solstice windows
+│   └── prayer_times_dataset_jpl.json  1,272 independent NASA/JPL DE421 records
 └── Tools/
-    └── regenerate_dataset.py          self-contained dataset (re)generator
+    ├── regenerate_dataset.py          baseline dataset generator and shared AlAdhan download code
+    ├── regenerate_extended_dataset.py extended AlAdhan dataset
+    └── regenerate_jpl_dataset.py      independent JPL ephemeris dataset
 ```
 
 ## Technical notes

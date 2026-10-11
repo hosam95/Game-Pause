@@ -18,7 +18,7 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
     ///  1. UmmAlQura Ramadan rule - the reference (AlAdhan/PrayTimes) uses
     ///     Isha = Maghrib + 120 min during Hijri month 9 (Ramaḍān) instead of 90.
     ///     The dataset's Ramadan flag is passed to the calculator.
-    ///  2. High-latitude handling - the reference uses the AngleBased rule.
+    ///  2. High-latitude handling - the record's high_lat_rule (AngleBased when empty, as in the baseline).
     ///
     /// Rounding matches the reference: +30 s, then truncate to the minute.
     /// Local time = UTC + record.utc_offset (offset at local noon of that date).
@@ -31,6 +31,12 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
         /// <summary>Runs the full accuracy evaluation over every record in the dataset.</summary>
         public static AccuracyReport Evaluate(PrayerTimeAccuracyDataset dataset)
         {
+            return Evaluate(dataset, null);
+        }
+
+        /// <summary>Runs the accuracy evaluation over the records accepted by <paramref name="filter"/> (all when null).</summary>
+        public static AccuracyReport Evaluate(PrayerTimeAccuracyDataset dataset, Func<PrayerTimeAccuracyRecord, bool> filter)
+        {
             var report = new AccuracyReport();
             var methodAgg = new Dictionary<string, MethodAggregate>();
             var prayerAgg = new PerPrayerStat[6];
@@ -39,6 +45,7 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
 
             foreach (var rec in dataset.records)
             {
+                if (filter != null && !filter(rec)) continue;
                 bool hadInvalid;
                 int[] ourMinutes = ComputeRecord(rec, out hadInvalid);
                 report.total_records++;
@@ -58,7 +65,7 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
                     ps.n++;
                     agg.n++;
 
-                    int diff = ourMin - refMin;
+                    int diff = WrapDifference(ourMin - refMin);
                     int adiff = Math.Abs(diff);
 
                     report.total_comparisons++;
@@ -139,7 +146,7 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
 
         /// <summary>
         /// Computes the six prayer times for one record with <see cref="PrayerTimeCalculator"/>,
-        /// configured like the reference (AngleBased high-latitude rule, dataset Ramadan flag).
+        /// configured like the reference (the record's high-latitude rule, dataset Ramadan flag).
         /// Returns local minutes (0..1439) per prayer in fajr..isha order.
         /// <paramref name="hadInvalid"/> is true when the raw Fajr/Isha angle is never reached
         /// and the high-latitude rule had to supply the time.
@@ -158,7 +165,10 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
                 ? AsrJuristicMethod.Hanafi
                 : AsrJuristicMethod.Standard;
 
-            var calculator = new PrayerTimeCalculator(method, asrMethod, HighLatitudeRule.AngleBased);
+            HighLatitudeRule rule = string.IsNullOrEmpty(rec.high_lat_rule)
+                ? HighLatitudeRule.AngleBased
+                : Enum.Parse<HighLatitudeRule>(rec.high_lat_rule);
+            var calculator = new PrayerTimeCalculator(method, asrMethod, rule);
             DailyPrayerTimes times = calculator.Calculate(date, new GeographicCoordinates(rec.lat, rec.lon), rec.ramadan);
 
             hadInvalid = IsAngleUnreached(calculator.Parameters.MethodParameters, date, rec);
@@ -178,6 +188,13 @@ namespace GamePause.SalahEvents.PrayerTimeAccuracy
                 return true;
             return !p.UsesIshaInterval &&
                    double.IsNaN(SolarCalculator.GetTimeForAngle(jd, rec.lat, rec.lon, p.IshaAngle.Value, false));
+        }
+
+        /// <summary>Folds a minutes-of-day difference into [-720, 720) so 23:59 vs 00:01 is 2 minutes, not 1438.</summary>
+        public static int WrapDifference(int diffMinutes)
+        {
+            int d = ((diffMinutes % 1440) + 1440) % 1440;
+            return d >= 720 ? d - 1440 : d;
         }
 
         /// <summary>fixHour: wrap to [0, 24).</summary>
