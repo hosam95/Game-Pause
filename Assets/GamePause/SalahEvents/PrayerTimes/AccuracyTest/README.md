@@ -221,8 +221,8 @@ under MuslimWorldLeague, on dates Jan–Feb and Nov–Dec. The maximum is +11 mi
 **Why:** the reference (PrayTimes family) evaluates the sun position with the
 USNO *approximation* (a truncated series) and samples the sun at the *previous* iteration's time.
 At 64°N in winter the Asr shadow angle is very shallow, so the reference's own error is
-amplified into multi-minute deltas. The independent JPL dataset (below) confirms that, for Asr,
-the reference is the less accurate side. Every other city, method, and date combination
+amplified into multi-minute deltas. The independent JPL dataset (below) agrees with the module on Asr, but it
+also uses a different Asr convention than the reference, so this is a convention difference, not a proven error. Every other city, method, and date combination
 is within ±3 minutes. Eight of the ten methods are 100% within ±2 minutes; the two
 exceptions are MuslimWorldLeague (97.3%) and Russia (98.4%), both driven by the
 winter high-latitude cases above.
@@ -296,8 +296,11 @@ clamp replaces a reachable angle (a ruling, not astronomy).
 Overall, module vs JPL: ±1 89.7%, ±2 97.8%, ±5 99.7%, mean absolute error 0.61 min, max 9 min.
 
 Conclusions:
-- **Asr:** the module is closer to the astronomical truth than AlAdhan. The baseline's Asr outliers
-  (up to +11 min at Reykjavik) are the reference's error.
+- **Asr:** the module agrees with JPL far better than AlAdhan does (91.6% vs 57.1% within ±1 min). Part of that is
+  a convention, not an error: the JPL script takes the sun's declination at solar transit to set the Asr shadow
+  angle, while PrayTimes/AlAdhan takes it at the Asr time, and at high latitude the two differ by minutes. Which
+  noon shadow defines Asr is a juristic-adjacent definition for the owner to choose, so the baseline's Asr
+  outliers should be read as "the reference uses a different convention than the module", not as proven reference error.
 - **Maghrib and Isha:** AlAdhan matches JPL and the module does not, with an error that grows with latitude
   (Maghrib ±1 min: 100% at Cairo and Sydney, 96% at Madrid, 25% at Trondheim); Sunrise shows no such trend.
   The baseline's explanation that the evening spread comes from the reference was therefore wrong:
@@ -348,8 +351,8 @@ Assets/GamePause/SalahEvents/PrayerTimes/AccuracyTest/
   (`PrayerTimeCalculator.Calculate`) configured like the reference: the `AngleBased`
   high-latitude rule and the dataset's UmmAlQura Ramadan flag. Only reporting concerns
   (+30 s rounding, noon UTC offset) live in the engine, so the test measures the same
-  code the game uses; residual differences are the genuine USNO-approximation vs
-  full-NOAA algorithmic delta.
+  code the game uses. Residual differences come from the reference's approximations and the Asr convention; the
+  evening (Maghrib/Isha) differences were found against the JPL dataset to be a module issue (see "Extended dataset").
 - **JsonUtility:** the model POCOs use public fields with exact JSON key names
   (no nullables, no dictionaries) to stay compatible with `JsonUtility`.
 - **`[Button]`:** Unity 6000.2.10f1 has no built-in `UnityEngine.Button` attribute;
